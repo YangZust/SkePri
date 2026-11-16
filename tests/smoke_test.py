@@ -90,7 +90,7 @@ def test_raw_preprocessing():
             (raw/(name+'.skeleton')).write_text('\n'.join(lines)+'\n')
         for dataset, count, temporal_protocol in (('ntu60', 2, 'xview'), ('ntu120', 3, 'xset')):
             subprocess.run([sys.executable, 'data/prepare_ntu.py', '--dataset', dataset,
-                            '--raw-dir', str(raw), '--output-dir', str(td/'prepared')], check=True)
+                            '--raw-dir', str(raw), '--output-dir', str(td/'prepared'), '--allow-partial'], check=True)
             with (td/'prepared'/(dataset+'_3danno.pkl')).open('rb') as f:
                 result=pickle.load(f)  # Generated locally by this test.
             assert len(result['annotations'])==count
@@ -141,15 +141,19 @@ def test_data_training():
         ann=[dict(frame_dir=f'sample{i}',label=i%2,total_frames=12,keypoint=rng.normal(size=(1 if i%2 else 2,12,25,3)).astype(np.float32)) for i in range(4)]
         with p.open('wb') as f: pickle.dump(dict(annotations=ann,split={'xsub_train':['sample0','sample1'],'xsub_val':['sample2','sample3']}),f)
         for stream in STREAMS:
-            ds=Feeder(p,'xsub',False,stream,8,10)
+            ds=Feeder(p,'xsub',False,stream,8,10,allow_partial=True)
             x,y,n=ds[0]; assert x.shape==(10,2,8,25,3) and np.isfinite(x).all()
-        cfg=load_config('config/ntu60-xsub/joint.yaml'); cfg['data'].update(path=str(p),clip_len=8,workers=0); cfg['training'].update(epochs=1,batch_size=2); cfg['work_dir']=str(td/'run')
+        cfg=load_config('config/ntu60-xsub/joint.yaml'); cfg['data'].update(path=str(p),clip_len=8,workers=0,allow_partial=True); cfg['training'].update(epochs=1,batch_size=2); cfg['work_dir']=str(td/'run')
         assert len(make_loader(cfg,'train').dataset)==10
         assert len(make_loader(cfg,'val').dataset)==2
         assert len(make_loader(cfg,'test').dataset)==2
         seed_all(1); train(cfg,SimpleNamespace(baseline=False,init_weights=None),torch.device('cpu'))
         run=Path(cfg['work_dir']); assert all((run/n).exists() for n in ('best.pth','best_inference.pth','best_scores.npz','best_result.json'))
         state=load_checkpoint(run/'best_inference.pth', trusted=True); assert 'prior' not in state and not any(k.startswith('auxiliary.') for k in state)
+        meta=json.loads((run/'best_inference.meta.json').read_text())
+        assert meta['method']=='skepri' and meta['seed']==1 and meta['checkpoint_epoch']==1
+        with np.load(run/'best_scores.npz',allow_pickle=False) as saved:
+            assert saved['method'].item()=='skepri' and saved['checkpoint_sha256'].item()==meta['checkpoint_sha256']
         # Exercise the public test CLI, including its independent weight-loading path.
         subprocess.run([sys.executable, 'main.py', '--config', str(run/'config.yaml'),
                         '--phase', 'test', '--weights', str(run/'best_inference.pth'),
@@ -179,7 +183,7 @@ def test_data_training():
         paths=[]
         for i,stream in enumerate(STREAMS):
             idx=np.array([1,0]) if i%2 else np.array([0,1]); path=td/(stream+'.npz')
-            np.savez(path,ids=np.array(['a','b'])[idx],labels=np.array([0,1])[idx],scores=np.eye(2)[idx],dataset='ntu60',protocol='xsub',stream=stream); paths.append(path)
+            np.savez(path,ids=np.array(['a','b'])[idx],labels=np.array([0,1])[idx],scores=np.eye(60)[:2][idx],dataset='ntu60',protocol='xsub',stream=stream,method='skepri',seed=i,checkpoint_epoch=i+1,score_type='probability',schema_version=1,checkpoint_sha256='0'*64); paths.append(path)
         scores,labels,ids=fuse(paths,[1,2,3,4]); assert np.array_equal(scores.argmax(1),labels)
         subprocess.run([sys.executable, 'ensemble.py', '--joint', str(paths[0]),
                         '--bone', str(paths[1]), '--joint-motion', str(paths[2]),
@@ -190,4 +194,5 @@ def test_data_training():
         print('Four-stream ID-aligned fusion passed')
 
 if __name__=='__main__':
-    test_checkpoint_compatibility(); test_raw_preprocessing(); test_models(); test_data_training(); print('ALL SMOKE TESTS PASSED')
+    from release_checks import test_contracts
+    test_checkpoint_compatibility(); test_contracts(); test_raw_preprocessing(); test_models(); test_data_training(); print('ALL SMOKE TESTS PASSED')

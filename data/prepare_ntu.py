@@ -9,17 +9,22 @@ import pickle
 import re
 from pathlib import Path
 from tqdm import tqdm
+import sys
+import json
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
+from validation import skeleton, annotation_metadata
 
 eps = 1e-3
 
 
-def parse_skeleton_file(ske_name, root='nturgb+d_skeletons'):
+def _parse_skeleton_file(ske_name, root='nturgb+d_skeletons'):
     ske_file = osp.join(root, ske_name + '.skeleton')
 
     with open(ske_file) as f:
         lines = f.read().splitlines()
     idx = 0
     num_frames = int(lines[0])
+    if num_frames<1: raise ValueError('No valid frames')
     num_joints = 25
     idx += 1
 
@@ -28,6 +33,7 @@ def parse_skeleton_file(ske_name, root='nturgb+d_skeletons'):
 
     for f in range(num_frames):
         num_bodies = int(lines[idx])
+        if num_bodies<0: raise ValueError('Negative body count')
         idx += 1
         if num_bodies == 0:
             continue
@@ -37,7 +43,7 @@ def parse_skeleton_file(ske_name, root='nturgb+d_skeletons'):
                 kpt = []
                 body_data[bodyID] = dict(kpt=kpt, start=fidx)
             idx += 1
-            assert int(lines[idx]) == 25
+            if int(lines[idx]) != 25: raise ValueError('Expected 25 joints')
             idx += 1
             joints = np.zeros((25, 3), dtype=np.float32)
 
@@ -52,8 +58,19 @@ def parse_skeleton_file(ske_name, root='nturgb+d_skeletons'):
         body_data[k]['motion'] = np.sum(np.var(np.vstack(body_data[k]['kpt']), axis=0))
         body_data[k]['kpt'] = np.stack(body_data[k]['kpt'])
 
-    assert idx == len(lines)
+    if idx != len(lines): raise ValueError('Trailing/incomplete skeleton records')
     return body_data
+
+
+def parse_skeleton_file(ske_name, root='nturgb+d_skeletons'):
+    path=Path(root)/(ske_name+'.skeleton')
+    try:
+        result=_parse_skeleton_file(ske_name,root)
+        if not result: raise ValueError('No body trajectories')
+        for item in result.values(): skeleton(item['kpt'][None],25,ske_name)
+        return result
+    except (OSError,ValueError,IndexError,AssertionError,TypeError) as exc:
+        raise ValueError('{}: {}: {}'.format(path,type(exc).__name__,exc)) from exc
 
 
 def spread_denoising(body_data_list):
@@ -81,13 +98,16 @@ def spread_denoising(body_data_list):
             item['motion'] = min(item['motion'],
                                  np.sum(np.var(item['kpt'][valid_frames].reshape(-1, 3), axis=0)))
     body_data_list = [item for item in body_data_list if item['flag']]
-    assert len(body_data_list) >= 1
+    if not body_data_list: raise ValueError('No valid body trajectories after spatial denoising')
     _ = [item.pop('flag') for item in body_data_list]
     body_data_list.sort(key=lambda x: -x['motion'])
     return body_data_list
 
 
 def non_zero(kpt):
+    skeleton(kpt,25,'non_zero')
+    if not np.any(np.sum(np.abs(kpt),axis=(0,2,3))>=eps):
+        raise ValueError('No valid frames above original epsilon threshold')
     s = 0
     e = kpt.shape[1]
     while np.sum(np.abs(kpt[:, s])) < eps:
@@ -101,11 +121,13 @@ def gen_keypoint_array(body_data):
     length_threshold = 11
 
     body_data = cp.deepcopy(list(body_data.values()))
+    if not body_data: raise ValueError('No body trajectories')
     body_data.sort(key=lambda x: -x['motion'])
     if len(body_data) == 1:
         return body_data[0]['kpt'][None]
     else:
         body_data = [item for item in body_data if item['kpt'].shape[0] > length_threshold]
+        if not body_data: raise ValueError('No valid body trajectories after length filtering')
         if len(body_data) == 1:
             return body_data[0]['kpt'][None]
         body_data = spread_denoising(body_data)
@@ -674,21 +696,38 @@ S032C003P067R002A077
 """.split())
 TRAIN_SUBJECTS = [1, 2, 4, 5, 8, 9, 13, 14, 15, 16, 17, 18, 19, 25, 27, 28, 31, 34, 35, 38, 45, 46, 47, 49, 50, 52, 53, 54, 55, 56, 57, 58, 59, 70, 74, 78, 80, 81, 82, 83, 84, 85, 86, 89, 91, 92, 93, 94, 95, 97, 98, 100, 103]
 
-def prepare(dataset, raw_dir, output_dir):
+def prepare(dataset, raw_dir, output_dir, allow_partial=False, reference_path=None):
+    if dataset not in ('ntu60','ntu120'): raise ValueError('Invalid dataset name')
     limit = 60 if dataset=='ntu60' else 120
     paths=sorted(Path(raw_dir).glob('*.skeleton'))
     if not paths: raise FileNotFoundError(f'No .skeleton files in {raw_dir}')
     anns=[]
+    stats=dict(dataset=dataset,discovered_skeleton_files=len(paths),official_missing_samples_excluded=0,
+               out_of_scope_classes_excluded=0,invalid_sequences=[],valid_annotations=0)
+    seen=set()
     for path in tqdm(paths,desc='Preprocessing '+dataset):
         name=path.stem
-        if not re.fullmatch(r'S\d{3}C\d{3}P\d{3}R\d{3}A\d{3}',name): continue
-        if name in MISSING or int(name[-3:])>limit: continue
-        bodies=parse_skeleton_file(name,str(path.parent))
-        if not bodies: continue
-        # Match the source preprocessing; avoid silent loss for malformed sequences.
-        kp=gen_keypoint_array(bodies).astype(np.float16)
-        if not np.isfinite(kp).all() or kp.shape[1]==0: raise ValueError(f'Invalid skeleton {name}')
+        try:
+            if not re.fullmatch(r'S\d{3}C\d{3}P\d{3}R\d{3}A\d{3}',name): raise ValueError('Malformed sample filename')
+            if name in seen: raise ValueError('Duplicate sample ID')
+            seen.add(name)
+            action=int(name[-3:])
+            if not 1<=action<=120: raise ValueError('Illegal action number')
+            if name in MISSING:
+                stats['official_missing_samples_excluded']+=1; continue
+            if action>limit:
+                stats['out_of_scope_classes_excluded']+=1; continue
+            bodies=parse_skeleton_file(name,str(path.parent))
+            kp=gen_keypoint_array(bodies).astype(np.float16)
+            skeleton(kp,25,name)
+        except (ValueError,IndexError,AssertionError,TypeError) as exc:
+            stats['invalid_sequences'].append(dict(id=name,reason=str(exc)))
+            continue
         anns.append(dict(frame_dir=name,label=int(name[-3:])-1,keypoint=kp,total_frames=kp.shape[1]))
+    stats['valid_annotations']=len(anns)
+    stats['unique_classes']=len({a['label'] for a in anns})
+    print(json.dumps(stats,indent=2))
+    if stats['invalid_sequences']: raise ValueError('Invalid raw samples: '+json.dumps(stats['invalid_sequences']))
     if not anns: raise ValueError('No valid annotations')
     names=[a['frame_dir'] for a in anns]
     subj=set(TRAIN_SUBJECTS if limit==120 else TRAIN_SUBJECTS[:20])
@@ -699,12 +738,21 @@ def prepare(dataset, raw_dir, output_dir):
     for protocol, pred in predicates.items():
         split[protocol+'_train']=[n for n in names if pred(n)]
         split[protocol+'_val']=[n for n in names if not pred(n)]
+    data=dict(split=split,annotations=anns)
+    reference=None
+    if reference_path:
+        with open(reference_path,'rb') as f: reference=pickle.load(f)  # trusted official PKL only
+    for protocol in predicates: annotation_metadata(data,dataset,protocol,allow_partial,reference)
+    if allow_partial: print('WARNING: PARTIAL DEBUG DATA; completeness NOT certified; not for formal experiments')
+    else: print('Sample IDs and split counts match the explicitly supplied trusted reference')
     output=Path(output_dir)/f'{dataset}_3danno.pkl'
     output.parent.mkdir(parents=True,exist_ok=True)
-    with output.open('xb') as f: pickle.dump(dict(split=split,annotations=anns),f,protocol=4)
+    with output.open('xb') as f: pickle.dump(data,f,protocol=4)
     print(f'{output}: {len(anns)} samples; '+str({k:len(v) for k,v in split.items()}))
 
 if __name__=='__main__':
     p=argparse.ArgumentParser(); p.add_argument('--dataset',choices=['ntu60','ntu120'],required=True)
     p.add_argument('--raw-dir',required=True); p.add_argument('--output-dir',default='data/nturgbd')
-    a=p.parse_args(); prepare(a.dataset,a.raw_dir,a.output_dir)
+    p.add_argument('--allow-partial',action='store_true',help='Debug only; invalid samples still fail')
+    p.add_argument('--reference',help='Trusted official PYSKL annotations for exact sample/split comparison')
+    a=p.parse_args(); prepare(a.dataset,a.raw_dir,a.output_dir,a.allow_partial,a.reference)

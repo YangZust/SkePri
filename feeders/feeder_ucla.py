@@ -6,10 +6,14 @@ import random
 import math
 
 from torch.utils.data import Dataset
+from validation import real_array, integer
 
 class Feeder(Dataset):
     def __init__(self, data_path, label_path, repeat=1, random_choose=False, random_shift=False, random_move=False,
                  window_size=52, normalization=False, debug=False, use_mmap=True, root="data/NW-UCLA/all_sqe"):
+
+        if normalization: raise ValueError('normalization=True is unsupported; the formal coordinate normalization is always preserved')
+        integer(repeat,'repeat'); integer(window_size,'window_size')
 
         if 'val' in label_path:
             self.train_val = 'val'
@@ -43,12 +47,19 @@ class Feeder(Dataset):
     def load_data(self):
         # data: N C V T M
         self.data = []
+        names=[r['file_name'] for r in self.data_dict]
+        if len(set(names))!=len(names): raise ValueError('Duplicate NW-UCLA file names')
         for data in self.data_dict:
             file_name = data['file_name']
-            with open(self.nw_ucla_root + file_name + '.json', 'r') as f:
-                json_file = json.load(f)
-            skeletons = json_file['skeletons']
-            value = np.array(skeletons)
+            path=self.nw_ucla_root + file_name + '.json'
+            try:
+                integer(int(data['label']),'NW-UCLA label')
+                if not 1<=int(data['label'])<=10: raise ValueError('label out of range')
+                with open(path,'r') as f: json_file=json.load(f)
+                value=real_array(json_file['skeletons'],'skeletons')
+                if value.ndim!=3 or value.shape[0]<1 or value.shape[1:]!=(20,3): raise ValueError('expected nonempty [T,20,3]')
+            except (OSError,ValueError,TypeError,KeyError) as exc:
+                raise ValueError('{}: {}'.format(path,exc)) from exc
             self.data.append(value)
 
 
@@ -100,7 +111,6 @@ class Feeder(Dataset):
 
             random_idx = random.sample(list(np.arange(length))*max(100, math.ceil(self.time_steps / length)), self.time_steps)
             random_idx.sort()
-            data[:,:,:] = value[random_idx,:,:]
             data[:,:,:] = value[random_idx,:,:]
 
         else:
