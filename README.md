@@ -30,8 +30,6 @@ python -m pip install -r requirements.txt
 
 The requirements file does not install or upgrade PyTorch/CUDA. Core training and inference require neither OpenAI SDK nor network access once local inputs are available. The optional prior-generation SDK is installed separately; see [Prior Banks](priors/README.md).
 
-The engineering smoke tests passed with Python 3.7.11 / PyTorch 1.11.0+cpu / NumPy 1.20.3 and Python 3.9.24 / PyTorch 2.7.1 / NumPy 2.0.2. These test environments are distinct from the original CUDA 11.3 / RTX 4090 environment. See [Reproducibility](REPRODUCIBILITY.md) for test scope and limitations.
-
 ## Data Preparation
 
 ### Download Datasets
@@ -124,12 +122,10 @@ The example uses equal weights in J/B/JM/BM order. It does not specify the manus
 
 Fusion requires four files with the same method (all SkePri or all CTR-GCN Baseline), dataset, protocol and score type. Seeds and selected epochs may differ across streams. Legacy scores without provenance must be regenerated. Testing requires an explicit `--weights` path; legacy checkpoints require an explicit `--source-method skepri` or `--source-method ctrgcn_baseline` declaration. Optional `--source-seed` and `--source-epoch` describe the original training run; omitted values are recorded as unknown (-1), never inferred from the test seed.
 
-For the current implementation's benchmark verification status, see [Reproducibility](REPRODUCIBILITY.md).
-
 ## Acknowledgements
 
 This implementation builds on [CTR-GCN](https://github.com/Uason-Chen/CTR-GCN) and [PYSKL](https://github.com/kennymckormick/pyskl). We thank the original authors for their work.
 
 ## License
 
-See [LICENSE](LICENSE) and [upstream licenses](licenses/) for the applicable terms and attribution.
+SkePri's original contributions are licensed under [Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)](https://creativecommons.org/licenses/by-nc/4.0/). CTR-GCN-derived portions retain their original CC BY-NC 4.0 license; PYSKL-derived portions retain their original Apache License 2.0 and notices. See [LICENSE](LICENSE) and the unchanged [third-party license texts](licenses/) for the applicable scope and attribution.

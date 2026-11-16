@@ -1,11 +1,27 @@
-SkePri source integration includes material adapted from PYSKL and CTR-GCN.
+SkePri licensing and third-party notices
 
-PYSKL: Copyright 2018–2019 Open-MMLab. Apache License, Version 2.0.
-Full original license: licenses/PYSKL-LICENSE.txt.
+Original contributions developed for SkePri are licensed under the Creative
+Commons Attribution-NonCommercial 4.0 International license (CC BY-NC 4.0).
+Official license: https://creativecommons.org/licenses/by-nc/4.0/
+Full legal terms: https://creativecommons.org/licenses/by-nc/4.0/legalcode.en
+
+This license applies to SkePri's original contributions only. It does not
+replace the licenses, copyright notices, or attribution requirements of
+third-party code or datasets. Files containing material from multiple sources
+retain the applicable notices and terms for each source and contribution.
 
 CTR-GCN: Chen et al., original CTR-GCN repository.
-Full original license: licenses/CTR-GCN-LICENSE.txt (CC BY-NC 4.0).
+CTR-GCN original code and the corresponding derived portions retain their
+original CC BY-NC 4.0 license and attribution requirements.
+Full original license: licenses/CTR-GCN-LICENSE.txt.
+Source: https://github.com/Uason-Chen/CTR-GCN
 
-Keep these notices and respect the applicable upstream terms. This notice does
-not grant additional rights to third-party code or datasets. The SkePri authors
-should specify licensing for their own additions before publishing this repository.
+PYSKL: Copyright 2018–2019 Open-MMLab. Apache License, Version 2.0.
+PYSKL original code and the corresponding derived portions retain their
+original Apache License, Version 2.0, copyright notices, and attribution
+requirements. The Apache-licensed material is not relicensed as CC BY-NC 4.0.
+Full original license: licenses/PYSKL-LICENSE.txt.
+Source: https://github.com/kennymckormick/pyskl
+
+Keep all applicable third-party notices and full license texts when
+redistributing the corresponding material.
