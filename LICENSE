@@ -1,0 +1,11 @@
+SkePri source integration includes material adapted from PYSKL and CTR-GCN.
+
+PYSKL: Copyright 2018–2019 Open-MMLab. Apache License, Version 2.0.
+Full original license: licenses/PYSKL-LICENSE.txt.
+
+CTR-GCN: Chen et al., original CTR-GCN repository.
+Full original license: licenses/CTR-GCN-LICENSE.txt (CC BY-NC 4.0).
+
+Keep these notices and respect the applicable upstream terms. This notice does
+not grant additional rights to third-party code or datasets. The SkePri authors
+should specify licensing for their own additions before publishing this repository.

@@ -1,0 +1,33 @@
+dataset: nwucla
+protocol: xview
+stream: bone_motion
+seed: 1
+model:
+  num_classes: 10
+  num_person: 1
+  prior_path: priors/nwucla_bone.npy
+  aux_weight: 0.01
+  dropout: 0.0
+data:
+  path: data/NW-UCLA/all_sqe
+  clip_len: 52
+  train_repeat: 5
+  workers: 4
+training:
+  epochs: 65
+  batch_size: 16
+  lr: 0.1
+  momentum: 0.9
+  nesterov: true
+  weight_decay: 0.0001
+  schedule: step
+  warmup_epochs: 5
+  milestones:
+  - 50
+  lr_decay: 0.1
+evaluation:
+  interval: 1
+  val_clips: 1
+  test_clips: 1
+  batch_size: 64
+work_dir: work_dirs/nwucla/bone_motion

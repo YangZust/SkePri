@@ -1,0 +1,4 @@
+# Optional API client for tools/generate_priors.py only.
+# Use a separate Python 3.9+ environment with the core NumPy dependency.
+# This file is NOT required by training, inference, preprocessing, or fusion.
+openai>=1.0,<2

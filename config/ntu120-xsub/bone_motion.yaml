@@ -1,0 +1,32 @@
+dataset: ntu120
+protocol: xsub
+stream: bone_motion
+seed: 1
+model:
+  num_classes: 120
+  num_person: 2
+  prior_path: priors/ntu120.npy
+  aux_weight: 0.01
+  dropout: 0.0
+data:
+  path: data/nturgbd/ntu120_3danno.pkl
+  clip_len: 100
+  train_repeat: 5
+  workers: 4
+training:
+  epochs: 90
+  batch_size: 64
+  lr: 0.1
+  momentum: 0.9
+  nesterov: true
+  weight_decay: 0.0004
+  schedule: cosine
+  warmup_epochs: 0
+  milestones: []
+  lr_decay: 0.1
+evaluation:
+  interval: 1
+  val_clips: 1
+  test_clips: 10
+  batch_size: 1
+work_dir: work_dirs/ntu120-xsub/bone_motion
