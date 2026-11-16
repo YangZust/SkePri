@@ -19,7 +19,13 @@ The bundled banks are sufficient for training. Only the optional API generator n
 
 ```bash
 python -m pip install -r requirements.txt -r requirements-priors.txt
-python tools/generate_priors.py --dataset ntu60 --prompts path/to/prompts.json --output path/to/new_bank.npy
+python tools/generate_priors.py --dataset ntu60 --prompts priors/prompts/ntu60.json --output generated_priors/ntu60_gpt4o.npy
 ```
 
-Run these commands from the repository root with `OPENAI_API_KEY` set in the environment. Supply complete prompts in class-index order. The original prompts are not reconstructed by this utility, and its SDK/API execution is not covered by the core smoke tests. It refuses to overwrite an existing output; do not replace the formal prior banks.
+Run these commands from the repository root with `OPENAI_API_KEY` set in the environment. The bundled NTU60 original experimental prompts were extracted statically from the author-supplied original `generate_gpt_matrix_api.py`; that script was not executed or uploaded. Its file hash is recorded in `prompts/ntu60.json`. The JSON contains the exact System prompt, User template, original joints_info string (including whitespace), 25 joint names, 60 class names and 60 fully expanded prompts in zero-based class order. Index 20 retains the historical name `spine`, corresponding to Kinect v2 SpineShoulder. Original class names such as `standing up`, `hopping (one foot)` and `jumping up` are retained rather than replaced by standardized dataset spellings.
+
+The original NTU60 priors were generated using GPT-4o through the Chat Completions API with a temperature of 0.1. The historical script and supplementary material do not explicitly specify top_p, a random seed, a maximum output-token setting or a fixed model snapshot. Independently regenerated matrices therefore are not guaranteed to match the original experimental priors. Reuse the released bank for experiments requiring the manuscript's original prior values.
+
+Structured prompt JSON requests include the recorded System prompt followed by each User prompt. Explicit CLI model/temperature arguments override JSON settings, which override tool defaults; effective values are printed. A legacy list of complete prompts remains supported as a user-only custom protocol and is not equivalent to the original NTU60 requests. Custom structured files can be supplied for other datasets; original NTU120/NW-UCLA generation prompts have not been independently verified or inferred from NTU60.
+
+The generator rejects invalid shapes, nonfinite values, out-of-range entries and non-unit diagonals. Accepted matrices are stored as float32 without symmetrization, clipping or offline normalization. It refuses existing outputs and all formal prior paths, including if a formal file is temporarily absent. Generation is optional; normal training/inference neither imports the SDK nor requires network access. Mock API tests are in `tests/test_prior_generation.py`; no real API requests were performed during this repair.

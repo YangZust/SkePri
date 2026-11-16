@@ -76,7 +76,7 @@ NW-UCLA is processed by the data feeder. See [Data Preparation](data/README.md) 
 Choose the YAML file corresponding to the desired dataset, evaluation protocol, and input stream. For example, to train SkePri on NTU RGB+D 60 X-Sub with the joint modality on GPU 0:
 
 ```bash
-python main.py --config config/ntu60-xsub/joint.yaml --device cuda:0 --validate --test-best
+python main.py --config config/ntu60-xsub/joint.yaml --reference-data path/to/trusted_official_ntu60.pkl --device cuda:0 --validate --test-best
 ```
 
 The configuration directories are:
@@ -95,12 +95,14 @@ Fixed structural prior banks are included in [`priors/`](priors/README.md). Trai
 
 Training saves the best checkpoint and final prediction scores under the configured `work_dirs/` directory. Use `--work-dir` to specify a new directory for another run.
 
+Validation and final best-checkpoint testing run by default; the two flags remain compatible aliases. Training saves method, training seed, selected epoch and checkpoint hash alongside deployment weights and scores. NTU formal runs require exact sample/split checks against an explicitly supplied trusted official reference; see [Data Preparation](data/README.md). Partial synthetic data require explicit debug opt-in and are not benchmark-certified.
+
 ### Testing
 
 Evaluate a trained model using its inference checkpoint:
 
 ```bash
-python main.py --config config/ntu60-xsub/joint.yaml --phase test --weights work_dirs/ntu60-xsub/joint/best_inference.pth --trust-checkpoint --device cuda:0 --output work_dirs/ntu60-xsub/joint/test_scores.npz
+python main.py --config config/ntu60-xsub/joint.yaml --phase test --weights work_dirs/ntu60-xsub/joint/best_inference.pth --reference-data path/to/trusted_official_ntu60.pkl --trust-checkpoint --device cuda:0 --output work_dirs/ntu60-xsub/joint/test_scores.npz
 ```
 
 The inference checkpoint excludes the auxiliary branch and structural prior bank. On older PyTorch versions without `weights_only`, use `--trust-checkpoint` only for weights you created or obtained from a trusted source. The same flag is required for `--init-weights` on those versions. Newer PyTorch always uses `weights_only=True`, even when the flag is present, and never falls back to unrestricted loading.
@@ -119,6 +121,8 @@ python ensemble.py \
 ```
 
 The example uses equal weights in J/B/JM/BM order. It does not specify the manuscript's historical fusion weights.
+
+Fusion requires four files with the same method (all SkePri or all CTR-GCN Baseline), dataset, protocol and score type. Seeds and selected epochs may differ across streams. Legacy scores without provenance must be regenerated. Testing requires an explicit `--weights` path; legacy checkpoints require an explicit `--source-method skepri` or `--source-method ctrgcn_baseline` declaration. Optional `--source-seed` and `--source-epoch` describe the original training run; omitted values are recorded as unknown (-1), never inferred from the test seed.
 
 For the current implementation's benchmark verification status, see [Reproducibility](REPRODUCIBILITY.md).
 

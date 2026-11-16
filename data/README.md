@@ -9,8 +9,8 @@ SkePri does not distribute raw or processed benchmark data. Obtain the datasets 
 3. Run:
 
 ```bash
-python data/prepare_ntu.py --dataset ntu60 --raw-dir data/NTU60
-python data/prepare_ntu.py --dataset ntu120 --raw-dir data/NTU120
+python data/prepare_ntu.py --dataset ntu60 --raw-dir data/NTU60 --reference path/to/trusted_official_ntu60.pkl
+python data/prepare_ntu.py --dataset ntu120 --raw-dir data/NTU120 --reference path/to/trusted_official_ntu120.pkl
 ```
 
 The PYSKL-derived preprocessing code embeds the missing-skeleton list, filters those IDs, parses and denoises body tracks, produces `M,T,25,3` skeleton arrays and constructs the official cross-subject/cross-view/cross-setup splits. Output files are `data/nturgbd/ntu60_3danno.pkl` and `data/nturgbd/ntu120_3danno.pkl`. Existing output files are not overwritten. To use a preprocessed annotation from PYSKL instead, place the trusted files at the same paths. Source-provided PYSKL download links:
@@ -21,6 +21,12 @@ The PYSKL-derived preprocessing code embeds the missing-skeleton list, filters t
 Expected structure: `{'split': {protocol+'_train': [sample_id,...], protocol+'_val': [...]}, 'annotations': [{'frame_dir': id, 'keypoint': array[M,T,25,3], 'label': zero_based_int, 'total_frames': T}, ...]}`. Only load pickle files from trusted sources. Use the full datasets, not a subset, for benchmark experiments. Published preprocessing and exclusions may affect sample counts.
 
 NTU uses the original PYSKL order: 3D centering/spine alignment, joint/bone/motion feature generation, uniform temporal sampling, pose decoding and padding to two persons. Each clip has 100 frames. Validation uses one clip; final test averages probabilities from ten clips. The official test split is used for checkpoint selection, matching the manuscript (not an independent validation set).
+
+Formal preprocessing requires all classes and compares the exact sample IDs, labels and per-protocol train/test sets with the trusted official reference PKL supplied by the user. Counts are reported from that comparison, not inferred from raw published dataset totals. No independently verified complete PYSKL ID manifest is bundled; without a reference the tool stops with completeness NOT certified. Reference pickle files must come from a trusted source, such as the official PYSKL downloads above. Class coverage alone is not a completeness certificate.
+
+The training/test loader applies the same metadata contracts; use `main.py --reference-data path/to/trusted_official.pkl`. Skeleton coordinates are checked lazily on access to avoid repeatedly scanning all coordinates for three loaders. Invalid or duplicate IDs, overlapping/missing split IDs, invalid labels, shapes, frame counts and nonfinite/all-zero coordinates are rejected. Original filename, missing-list and out-of-scope-class filters remain distinct. Raw preprocessing reports statistics and all invalid sample IDs/reasons before refusing to write output. Float16 storage, denoising thresholds and official split logic are unchanged.
+
+For small synthetic/debug datasets only, use `--allow-partial` in preprocessing and training/testing. This explicitly skips full-dataset certification, still rejects malformed samples, and must not be used for formal accuracy reporting. Existing output files are never overwritten.
 
 ## Northwestern-UCLA
 
